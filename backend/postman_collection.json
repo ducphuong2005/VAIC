@@ -1,0 +1,39 @@
+{
+  "info": {
+    "name": "Career Compass API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Register",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "url": "{{baseUrl}}/api/v1/auth/register",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"email\":\"student@example.com\",\"password\":\"StrongPass123\",\"fullName\":\"Demo Student\"}"
+        }
+      }
+    },
+    {
+      "name": "Search Careers",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/careers/search?q=Data"
+      }
+    },
+    {
+      "name": "Generate Recommendation",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key": "Authorization", "value": "Bearer {{accessToken}}"},
+          {"key": "Content-Type", "value": "application/json"}
+        ],
+        "url": "{{baseUrl}}/api/v1/recommendations/generate",
+        "body": {"mode": "raw", "raw": "{\"region\":\"Hà Nội\",\"limit\":5}"}
+      }
+    }
+  ]
+}

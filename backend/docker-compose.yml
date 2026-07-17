@@ -1,0 +1,53 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: ${DB_NAME:-career_compass}
+      MYSQL_USER: ${DB_USERNAME:-career_compass}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-career_compass}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root-change-me}
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  spring-backend:
+    build: .
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-career_compass}
+      DB_USERNAME: ${DB_USERNAME:-career_compass}
+      DB_PASSWORD: ${DB_PASSWORD:-career_compass}
+      JWT_SECRET: ${JWT_SECRET:-change-this-secret-at-least-32-bytes-long}
+      INTERNAL_CRAWLER_API_KEY: ${INTERNAL_CRAWLER_API_KEY:-change-crawler-key}
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:4200}
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+
+  python-crawler:
+    image: python:3.12-slim
+    working_dir: /crawler
+    command: ["python", "-c", "print('Crawler placeholder: send jobs to /api/internal/v1/jobs/batch')"]
+    environment:
+      BACKEND_URL: http://spring-backend:8080
+      INTERNAL_CRAWLER_API_KEY: ${INTERNAL_CRAWLER_API_KEY:-change-crawler-key}
+
+  redis:
+    image: redis:7-alpine
+    profiles: ["optional"]
+    ports:
+      - "6379:6379"
+
+volumes:
+  mysql-data:
