@@ -1,0 +1,10 @@
+import { card } from '../components/layout.js';
+import { icon } from '../components/icons.js';
+import { skillStrip } from '../components/widgets.js';
+
+export function profilePage(){
+ const hero=`<div class="profile-hero"><div class="big-avatar">MA</div><div><h2>Nguyễn Minh Anh <span class="verified">✓</span></h2><p>minhanh@example.com · Hà Nội</p><div class="profile-tags"><span>Sinh viên năm 3</span><span>Đang tìm định hướng</span></div></div><button class="btn btn-outline">${icon('edit',16)} Chỉnh sửa hồ sơ</button></div><div class="completion"><div><strong>Hồ sơ đã hoàn thiện 72%</strong><span>Còn 3 mục để nhận gợi ý chính xác hơn</span></div><div class="progress"><i style="width:72%"></i></div></div>`;
+ const info=`<div class="info-grid">${[['Ngày sinh','18/08/2004'],['Giới tính','Nữ'],['Trường học','Đại học Kinh tế Quốc dân'],['Chuyên ngành','Hệ thống thông tin'],['Khu vực mong muốn','Hà Nội / Remote'],['Mục tiêu','Data Analyst']].map(([k,v])=>`<div><span>${k}</span><strong>${v}</strong></div>`).join('')}</div>`;
+ const goals=`<div class="goal-list"><label><input type="checkbox" checked><span><strong>Hoàn thành bài đánh giá năng lực</strong><small>Đã hoàn thành · 12/07/2026</small></span></label><label><input type="checkbox"><span><strong>Bổ sung kinh nghiệm và dự án</strong><small>Giúp tăng độ chính xác gợi ý thêm 12%</small></span></label><label><input type="checkbox"><span><strong>Xác định 3 nghề nghiệp quan tâm</strong><small>Đã chọn 2/3 nghề nghiệp</small></span></label></div>`;
+ return `<div class="two-col wide-left"><div>${card('',hero,{className:'profile-main'})}${card('Thông tin cá nhân',info,{action:'<button class="icon-btn">'+icon('edit',17)+'</button>'})}${card('Điểm mạnh nổi bật',skillStrip(),{})}</div><div>${card('Mức độ hồ sơ','<div class="big-ring"><strong>72%</strong><span>Khá tốt</span></div><ul class="profile-check"><li class="done">✓ Thông tin cơ bản</li><li class="done">✓ Khảo sát sở thích</li><li class="done">✓ Bài test năng lực</li><li>○ Kinh nghiệm & dự án</li></ul>',{className:'score-card'})}${card('Mục tiêu tiếp theo',goals,{icon:'route'})}</div></div>`;
+}
