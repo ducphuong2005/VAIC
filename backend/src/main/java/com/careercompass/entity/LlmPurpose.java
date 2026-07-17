@@ -1,0 +1,11 @@
+package com.careercompass.entity;
+
+public enum LlmPurpose {
+    PROFILE_EXTRACTION,
+    OPEN_RESPONSE_ANALYSIS,
+    RECOMMENDATION_EXPLANATION,
+    CAREER_COMPARISON,
+    LEARNING_PATH_GENERATION,
+    CHAT_RESPONSE,
+    TRANSLATION
+}

@@ -1,0 +1,10 @@
+package com.careercompass.repository;
+
+import com.careercompass.entity.UserSettings;
+import java.util.UUID;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface UserSettingsRepository extends JpaRepository<UserSettings, Long> {
+
+    boolean existsByUserId(UUID userId);
+}
