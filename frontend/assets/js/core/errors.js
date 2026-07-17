@@ -1,0 +1,2 @@
+export class ApiError extends Error{constructor(message,{status=0,code='API_ERROR',validationErrors={},cause}={}){super(message,{cause});this.name='ApiError';this.status=status;this.code=code;this.validationErrors=validationErrors}}
+export function friendlyErrorMessage(error){if(error?.code==='TIMEOUT')return'Yêu cầu quá thời gian. Vui lòng thử lại.';if(error?.status===401)return'Phiên đăng nhập đã hết hạn.';if(error?.status>=500)return'Hệ thống đang bận. Vui lòng thử lại sau.';return error?.message||'Không thể tải dữ liệu.'}
