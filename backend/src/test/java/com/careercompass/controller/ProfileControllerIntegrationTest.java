@@ -66,7 +66,7 @@ class ProfileControllerIntegrationTest {
     @Test
     void rejectsProfileWithoutAuthentication() throws Exception {
         mockMvc.perform(get("/api/v1/profile"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     private String registerAndGetAccessToken(String email) throws Exception {

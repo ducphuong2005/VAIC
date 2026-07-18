@@ -47,10 +47,10 @@ public interface LlmProvider {
 Providers:
 
 - `MockLlmProvider`
-- `OpenAiLlmProvider`
 - `GeminiLlmProvider`
+- `OpenAiLlmProvider`
 
-Mọi call được lưu vào `llm_calls`.
+Local mặc định dùng `LLM_PROVIDER=gemini`; có thể đổi lại OpenAI bằng `LLM_PROVIDER=openai`. Mọi call được lưu vào `llm_calls`.
 
 ## RAG
 
@@ -64,10 +64,10 @@ Chatbot chỉ lấy top documents, không đưa toàn bộ database vào prompt.
 ## Chat Flow
 
 1. Save user message.
-2. Detect intent.
-3. Retrieve RAG docs.
-4. Build prompt.
-5. Call LLM provider.
-6. Validate JSON/fallback.
+2. Build profile/career/job/RAG context.
+3. LLM 1 đọc context và sinh intent, RAG query, response guidance.
+4. Retrieve RAG docs theo định hướng từ LLM 1.
+5. LLM 2 nhận guidance + context và sinh câu trả lời JSON cuối.
+6. Validate JSON, không dùng câu trả lời fix cứng khi LLM lỗi.
 7. Apply guardrail.
 8. Save assistant response.

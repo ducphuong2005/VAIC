@@ -27,7 +27,8 @@ function initialState(backendGameId = '') {
     completed: false,
     saving: false,
     saved: false,
-    saveError: ''
+    saveError: '',
+    advice: null
   };
 }
 
@@ -247,10 +248,10 @@ function renderResult() {
   const saveLine = !isAuthenticated()
     ? '<p class="muted">Bạn đang chơi ở chế độ khách. Đăng nhập để lưu kết quả vào backend.</p><a class="btn btn-primary" href="login.html">Đăng nhập để lưu</a>'
     : state.saved
-      ? '<p class="escape-save ok">Đã lưu kết quả mini-game vào backend.</p>'
+      ? '<p class="escape-save ok">Đã lưu kết quả và tạo gợi ý AI từ dữ liệu việc làm.</p>'
       : state.saveError
         ? `<p class="escape-save error">${escapeHtml(state.saveError)}</p>`
-        : '<p class="escape-save">Đang lưu kết quả vào backend...</p>';
+        : '<p class="escape-save">Đang lưu kết quả và tạo gợi ý AI...</p>';
   return `
     <div class="escape-result">
       <div class="escape-hero result">
@@ -265,7 +266,55 @@ function renderResult() {
         ${card('Biểu đồ RIASEC', `<div class="escape-bars">${bars}</div>`, { icon: 'chart' })}
         ${card('Tóm tắt', `<div class="escape-summary"><h3>${tops.map(([key]) => `${key} - ${riasecLabels[key]}`).join(', ')}</h3><p>Thời gian chơi: ${durationSeconds} giây. Số lần chọn sai câu đố: ${state.wrongAttempts}.</p>${saveLine}<button class="btn btn-outline btn-block" data-escape-restart>Chơi lại ${icon('arrow', 15)}</button></div>`, { icon: 'trophy' })}
       </div>
+      ${renderAiAdvice()}
     </div>`;
+}
+
+function renderAiAdvice() {
+  const advice = state.advice;
+  if (!advice) return '';
+  const careers = (advice.careerOptions || []).slice(0, 3).map((career, index) => `
+    <article class="recommend-card compact">
+      <div class="recommend-top"><span class="best-label">Lựa chọn #${index + 1}</span><span class="match">${Math.round(Number(career.score || 0))}% phù hợp</span></div>
+      <h3>${escapeHtml(career.titleVi || career.titleEn || 'Nghề nghiệp')}</h3>
+      <div class="tags"><span>${escapeHtml(career.recommendationGroup || 'AI')}</span><span>${escapeHtml(career.onetCode || '')}</span></div>
+      <p>${escapeHtml(career.reason || 'LLM đã phân tích từ kết quả mini-game và dữ liệu việc làm hiện có.')}</p>
+    </article>`).join('');
+  const jobs = (advice.marketJobs || []).slice(0, 4).map(job => `
+    <li>
+      <b>${escapeHtml(job.title || 'Job sample TopCV')}</b>
+      <span>${escapeHtml(job.location || job.region || 'Không rõ khu vực')} · ${salaryText(job)}</span>
+    </li>`).join('');
+  const nextSteps = (advice.nextSteps || []).slice(0, 4).map(step => `<li>${icon('check', 15)} ${escapeHtml(step)}</li>`).join('');
+  const content = `
+    <div class="ai-result">
+      <div class="ai-result-copy">
+        <span class="eyebrow">LLM CAREER DISCOVERY</span>
+        <h3>Khám phá nghề nghiệp từ mini-game</h3>
+        <p>${escapeHtml(advice.content || 'AI đã tạo gợi ý từ dữ liệu mini-game và jobs.csv.')}</p>
+        <div class="tags">${(advice.topRiasecTypes || []).slice(0, 3).map(type => `<span>${escapeHtml(type.split(':')[0])}</span>`).join('')}</div>
+      </div>
+      <div class="ai-result-actions">
+        <a class="btn btn-primary" href="recommendations.html">Xem gợi ý cá nhân hóa ${icon('arrow', 15)}</a>
+        <a class="btn btn-outline" href="learning.html">Mở lộ trình học tập</a>
+        <a class="btn btn-ghost" href="careers.html">Khám phá nghề phù hợp</a>
+      </div>
+    </div>
+    <div class="escape-result-grid ai-grid">
+      ${card('Nghề nên khám phá', `<div class="ai-career-options">${careers || '<p class="muted">Chưa có nghề phù hợp.</p>'}</div>`, { icon: 'briefcase' })}
+      ${card('Job sample từ data/jobs.csv', `<ul class="profile-list">${jobs || '<li>Chưa tìm thấy job sample phù hợp.</li>'}</ul>`, { icon: 'info' })}
+      ${card('Bước tiếp theo', `<ul class="check-list">${nextSteps || '<li>Hỏi chatbot để phân tích sâu hơn.</li>'}</ul>`, { icon: 'route' })}
+    </div>`;
+  return content;
+}
+
+function salaryText(job = {}) {
+  const min = Number(job.salaryMin || 0);
+  const max = Number(job.salaryMax || 0);
+  if (min && max) return `${min} - ${max} triệu`;
+  if (min) return `từ ${min} triệu`;
+  if (max) return `đến ${max} triệu`;
+  return job.sourceName || 'TopCV CSV';
 }
 
 async function saveResult() {
@@ -279,7 +328,7 @@ async function saveResult() {
     })));
     const durationSeconds = Math.max(60, Math.round((Date.now() - state.startedAt) / 1000));
     const accuracy = totalPuzzles ? state.puzzleCorrect / totalPuzzles : 0;
-    await completeMiniGame(session.sessionId, {
+    const result = await completeMiniGame(session.sessionId, {
       accuracy,
       durationSeconds,
       answerChanges: state.wrongAttempts
@@ -290,6 +339,7 @@ async function saveResult() {
       puzzleCorrect: state.puzzleCorrect,
       wrongAttempts: state.wrongAttempts
     }));
+    state.advice = result.advice || null;
     state.saved = true;
   } catch (error) {
     state.saveError = error.message || 'Chưa lưu được kết quả vào backend.';

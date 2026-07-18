@@ -221,11 +221,19 @@ public class RecommendationService {
     private RecommendationRunResponse toRunResponse(RecommendationRun run) {
         return new RecommendationRunResponse(
                 run.getId(),
-                run.getProfileConfidence().doubleValue(),
+                responseConfidence(run.getProfileConfidence()),
                 recommendationRepository.findByRunIdOrderByRankNumberAsc(run.getId()).stream()
                         .map(this::toDetail)
                         .toList()
         );
+    }
+
+    private double responseConfidence(BigDecimal profileConfidence) {
+        if (profileConfidence == null) {
+            return 0;
+        }
+        double value = profileConfidence.doubleValue();
+        return value > 1 ? value / 100 : value;
     }
 
     private RecommendationDetailResponse toDetail(CareerRecommendation recommendation) {

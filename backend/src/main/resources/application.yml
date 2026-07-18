@@ -1,10 +1,14 @@
 spring:
+  config:
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:backend/.env[.properties]
   application:
     name: career-compass-backend
   datasource:
     url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:career_compass}?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC
-    username: root
-    password: "123456"
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:123456}
     driver-class-name: com.mysql.cj.jdbc.Driver
   flyway:
     enabled: true
@@ -43,10 +47,14 @@ app:
       feasibility: ${REC_WEIGHT_FEASIBILITY:0.10}
 
 llm:
-  provider: ${LLM_PROVIDER:mock}
+  provider: ${LLM_PROVIDER:gemini}
   base-url: ${LLM_BASE_URL:https://api.openai.com/v1}
+  gemini-base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com/v1beta}
   api-key: ${LLM_API_KEY:}
-  model: ${LLM_MODEL:gpt-4o-mini}
+  gemini-api-key: ${GEMINI_API_KEY:}
+  model: ${LLM_MODEL:gemini-flash-lite-latest}
+  context-model: ${LLM_CONTEXT_MODEL:${LLM_MODEL:gemini-flash-lite-latest}}
+  answer-model: ${LLM_ANSWER_MODEL:${LLM_MODEL:gemini-flash-latest}}
   timeout-seconds: ${LLM_TIMEOUT_SECONDS:30}
 
 springdoc:

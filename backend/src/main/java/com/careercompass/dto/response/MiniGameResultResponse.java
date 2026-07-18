@@ -8,6 +8,7 @@ public record MiniGameResultResponse(
         String status,
         String resultSummary,
         List<MiniGameResultMetricResponse> metrics,
-        int evidenceCreated
+        int evidenceCreated,
+        AiCareerAdviceResponse advice
 ) {
 }

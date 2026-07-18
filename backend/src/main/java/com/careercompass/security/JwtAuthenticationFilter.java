@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -34,7 +35,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private void authenticate(HttpServletRequest request, String token, UUID userId) {
-        UserDetails userDetails = userPrincipalService.loadUserById(userId);
+        UserDetails userDetails;
+        try {
+            userDetails = userPrincipalService.loadUserById(userId);
+        } catch (UsernameNotFoundException exception) {
+            SecurityContextHolder.clearContext();
+            return;
+        }
         if (!jwtService.isAccessTokenValid(token, userDetails)) {
             return;
         }

@@ -7,8 +7,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record LlmProperties(
         String provider,
         String baseUrl,
+        String geminiBaseUrl,
         String apiKey,
+        String geminiApiKey,
         String model,
+        String contextModel,
+        String answerModel,
         @Min(1) int timeoutSeconds
 ) {
 }

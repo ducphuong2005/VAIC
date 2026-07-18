@@ -23,3 +23,12 @@ app:
       refresh-token-days: 14
     internal:
       crawler-api-key: test-crawler-api-key
+
+llm:
+  provider: mock
+  base-url: https://api.openai.com/v1
+  api-key:
+  model: gpt-4o-mini
+  context-model: gpt-4o-mini
+  answer-model: gpt-4o-mini
+  timeout-seconds: 30

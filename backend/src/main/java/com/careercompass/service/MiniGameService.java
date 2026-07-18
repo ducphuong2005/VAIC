@@ -9,6 +9,7 @@ import com.careercompass.dto.response.MiniGameResultMetricResponse;
 import com.careercompass.dto.response.MiniGameResultResponse;
 import com.careercompass.dto.response.MiniGameSessionResponse;
 import com.careercompass.dto.response.MiniGameSummaryResponse;
+import com.careercompass.dto.response.AiCareerAdviceResponse;
 import com.careercompass.entity.EvidenceSourceType;
 import com.careercompass.entity.MiniGame;
 import com.careercompass.entity.MiniGameAction;
@@ -56,6 +57,7 @@ public class MiniGameService {
     private final ProfileEvidenceRepository evidenceRepository;
     private final MiniGameNormalizationService normalizationService;
     private final ProfileService profileService;
+    private final AiCareerAdviceService aiCareerAdviceService;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
@@ -144,7 +146,12 @@ public class MiniGameService {
 
         int evidenceCreated = createEvidence(userId, sessionId, results, metricsByCode);
         profileService.recalculate(userId);
-        return result(userId, sessionId, evidenceCreated);
+        AiCareerAdviceResponse advice = aiCareerAdviceService.buildAdviceAndPublish(
+                userId,
+                "MINIGAME_COMPLETED",
+                session.getNormalizedMetricsPayload()
+        );
+        return result(userId, sessionId, evidenceCreated, advice);
     }
 
     @Transactional(readOnly = true)
@@ -153,11 +160,27 @@ public class MiniGameService {
     }
 
     private MiniGameResultResponse result(UUID userId, UUID sessionId, int evidenceCreated) {
+        return result(userId, sessionId, evidenceCreated, null);
+    }
+
+    private MiniGameResultResponse result(UUID userId, UUID sessionId, int evidenceCreated, AiCareerAdviceResponse generatedAdvice) {
         MiniGameSession session = getOwnedSession(userId, sessionId);
         List<MiniGameResultMetricResponse> metrics = resultRepository.findBySessionId(sessionId).stream()
                 .map(result -> new MiniGameResultMetricResponse(result.getMetricCode(), result.getRawValue(), result.getNormalizedScore()))
                 .toList();
-        return new MiniGameResultResponse(sessionId, session.getStatus().name(), session.getResultSummary(), metrics, evidenceCreated);
+        AiCareerAdviceResponse advice = generatedAdvice != null
+                ? generatedAdvice
+                : session.getStatus() == SessionStatus.COMPLETED
+                        ? aiCareerAdviceService.buildAdvice(userId, "MINIGAME_RESULT_VIEWED", session.getNormalizedMetricsPayload())
+                        : null;
+        return new MiniGameResultResponse(
+                sessionId,
+                session.getStatus().name(),
+                session.getResultSummary(),
+                metrics,
+                evidenceCreated,
+                advice
+        );
     }
 
     private int createEvidence(UUID userId, UUID sessionId, List<MiniGameMetricResult> results, Map<String, MiniGameMetric> metricsByCode) {

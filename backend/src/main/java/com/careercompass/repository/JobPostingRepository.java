@@ -17,6 +17,8 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, Long> {
 
     List<JobPosting> findByActiveTrueAndOnetCodeIsNotNull();
 
+    List<JobPosting> findByActiveTrueAndOnetCodeInOrderByCrawledAtDesc(List<String> onetCodes, Pageable pageable);
+
     @Query("select distinct j.region from JobPosting j where j.active = true and j.region is not null order by j.region")
     List<String> findActiveRegions();
 

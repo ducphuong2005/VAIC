@@ -21,6 +21,8 @@ public class MySqlRagRetriever implements RagRetriever {
         return repository.findByActiveTrue().stream()
                 .filter(document -> !StringUtils.hasText(query.onetCode()) || query.onetCode().equals(document.getOnetCode()))
                 .filter(document -> !StringUtils.hasText(query.language()) || query.language().equalsIgnoreCase(document.getLanguage()))
+                .filter(document -> !StringUtils.hasText(query.region()) || document.getRegion() == null || query.region().equalsIgnoreCase(document.getRegion()))
+                .filter(document -> !StringUtils.hasText(query.sourceVersion()) || query.sourceVersion().equalsIgnoreCase(document.getSourceVersion()))
                 .filter(document -> query.documentType() == null || query.documentType() == document.getDocumentType())
                 .map(document -> toResult(document, normalized))
                 .sorted(Comparator.comparing(RagDocumentResult::score).reversed())

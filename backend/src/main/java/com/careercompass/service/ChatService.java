@@ -25,13 +25,17 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 @Service
 @RequiredArgsConstructor
@@ -42,6 +46,7 @@ public class ChatService {
     private final RagRetrievalLogRepository retrievalLogRepository;
     private final RagRetriever ragRetriever;
     private final LlmService llmService;
+    private final AiCareerAdviceService aiCareerAdviceService;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -71,83 +76,262 @@ public class ChatService {
     @Transactional
     public ChatMessageResponse message(UUID userId, UUID sessionId, SendChatMessageRequest request) {
         ConversationSession session = getOwnedSession(userId, sessionId);
-        ChatIntent intent = detectIntent(request.content());
-        messageRepository.save(ConversationMessage.builder()
+        ConversationMessage userMessage = messageRepository.save(ConversationMessage.builder()
                 .sessionId(session.getId())
                 .sender(MessageSender.USER)
                 .content(request.content())
-                .intent(intent)
                 .build());
 
-        List<RagDocumentResult> documents = ragRetriever.retrieve(new RagQuery(request.content(), null, "vi", null, null, null, 5));
+        AiCareerAdviceService.CareerContext careerContext = aiCareerAdviceService.buildCareerContext(
+                userId,
+                "CHAT",
+                request.content()
+        );
+        List<ConversationMessageResponse> recentMessages = recentMessages(session.getId());
+        LlmResponse contextResponse = llmService.generate(
+                LlmPurpose.OPEN_RESPONSE_ANALYSIS,
+                buildContextAnalysisPrompt(request.content(), recentMessages, careerContext)
+        );
+        ContextAnalysis contextAnalysis = parseContextAnalysis(requireSuccessfulLlm(contextResponse, "LLM đọc context"));
+        userMessage.setIntent(contextAnalysis.intent());
+        messageRepository.save(userMessage);
+
+        List<RagDocumentResult> documents = contextAnalysis.shouldUseCareerContext()
+                ? ragRetriever.retrieve(new RagQuery(contextAnalysis.ragQuery(), null, "vi", careerContext.preferredRegion(), null, null, 5))
+                : List.of();
         List<String> sources = documents.stream().map(RagDocumentResult::title).toList();
         retrievalLogRepository.save(RagRetrievalLog.builder()
                 .userId(userId)
-                .queryText(request.content())
-                .filtersPayload("{}")
+                .queryText(contextAnalysis.ragQuery())
+                .filtersPayload(toJson(Map.of("intent", contextAnalysis.intent().name(), "answerMode", contextAnalysis.answerMode())))
                 .resultsPayload(toJson(sources))
                 .build());
 
-        String prompt = buildPrompt(request.content(), intent, documents);
-        LlmResponse llmResponse = llmService.generate(LlmPurpose.CHAT_RESPONSE, prompt);
-        ParsedAssistantResponse parsed = parseAssistantResponse(llmResponse.content());
-        String guardedContent = guardrail(parsed.content());
+        LlmResponse answerResponse = llmService.generate(
+                LlmPurpose.CHAT_RESPONSE,
+                buildAnswerPrompt(request.content(), recentMessages, careerContext, contextAnalysis, documents)
+        );
+        ParsedAssistantResponse parsed = parseAssistantResponse(requireSuccessfulLlm(answerResponse, "LLM trả lời"));
         ConversationMessage assistant = messageRepository.save(ConversationMessage.builder()
                 .sessionId(session.getId())
                 .sender(MessageSender.ASSISTANT)
-                .content(guardedContent)
-                .intent(intent)
+                .content(parsed.content())
+                .intent(contextAnalysis.intent())
                 .confidence(BigDecimal.valueOf(parsed.confidence()))
                 .sources(toJson(sources))
                 .build());
         session.setTitle(session.getTitle() == null ? "Career chat" : session.getTitle());
+        session.setUpdatedAt(Instant.now());
         sessionRepository.save(session);
-        return new ChatMessageResponse(assistant.getId(), guardedContent, intent.name(), List.of(), List.of(), sources, parsed.confidence());
+        if (shouldPublishGuidance(contextAnalysis, careerContext)) {
+            aiCareerAdviceService.publishCareerGuidance(
+                    userId,
+                    careerContext,
+                    "AI_CHAT_GUIDANCE_GENERATED",
+                    "AI guidance generated from chatbot and data/jobs.csv",
+                    parsed.content(),
+                    parsed.confidence(),
+                    parsed.nextSteps()
+            );
+        }
+        return new ChatMessageResponse(
+                assistant.getId(),
+                parsed.content(),
+                contextAnalysis.intent().name(),
+                List.of(),
+                List.<Object>of(Map.of(
+                        "contextAnalysis", contextAnalysisPayload(contextAnalysis),
+                        "careerContext", careerContext,
+                        "nextSteps", parsed.nextSteps()
+                )),
+                sources,
+                parsed.confidence()
+        );
     }
 
-    private ChatIntent detectIntent(String content) {
-        String text = content.toLowerCase();
-        if (text.contains("skill") || text.contains("thiếu")) {
-            return ChatIntent.SKILL_GAP;
+    private boolean shouldPublishGuidance(ContextAnalysis contextAnalysis, AiCareerAdviceService.CareerContext careerContext) {
+        if (careerContext.careerOptions().isEmpty()) {
+            return false;
         }
-        if (text.contains("so sánh")) {
-            return ChatIntent.CAREER_COMPARISON;
-        }
-        if (text.contains("lộ trình") || text.contains("học")) {
-            return ChatIntent.LEARNING_PATH;
-        }
-        if (text.contains("thị trường") || text.contains("lương")) {
-            return ChatIntent.MARKET_QUESTION;
-        }
-        if (text.contains("nghề") || text.contains("phù hợp")) {
-            return ChatIntent.CAREER_RECOMMENDATION;
-        }
-        return ChatIntent.GENERAL_CAREER_CHAT;
+        return switch (contextAnalysis.intent()) {
+            case CAREER_RECOMMENDATION, CAREER_COMPARISON, SKILL_GAP, LEARNING_PATH, MARKET_QUESTION, PROFILE_DISCOVERY -> true;
+            case GENERAL_CAREER_CHAT -> contextAnalysis.shouldUseCareerContext();
+        };
     }
 
-    private String buildPrompt(String message, ChatIntent intent, List<RagDocumentResult> documents) {
-        return "Intent: " + intent + "\nUser: " + message + "\nSources: " + documents.stream()
+    private List<ConversationMessageResponse> recentMessages(UUID sessionId) {
+        List<ConversationMessageResponse> messages = messageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId).stream()
+                .map(this::toMessageResponse)
+                .toList();
+        int from = Math.max(0, messages.size() - 8);
+        return messages.subList(from, messages.size());
+    }
+
+    private String buildContextAnalysisPrompt(
+            String message,
+            List<ConversationMessageResponse> recentMessages,
+            AiCareerAdviceService.CareerContext careerContext
+    ) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("latestUserMessage", message);
+        payload.put("recentConversation", recentMessages);
+        payload.put("careerContext", careerContext);
+        payload.put("allowedIntents", java.util.Arrays.stream(ChatIntent.values()).map(Enum::name).toList());
+        return """
+                Bạn là LLM 1 trong pipeline Career Compass.
+                Nhiệm vụ: đọc tin nhắn mới, lịch sử hội thoại, dữ liệu hồ sơ, RIASEC, career options và job market context.
+                Không trả lời người dùng ở bước này. Chỉ định hướng cho LLM 2.
+                Nếu người dùng chỉ chào/xã giao, vẫn phải phân tích và hướng dẫn LLM 2 trả lời tự nhiên.
+                Nếu cần dữ liệu RAG/job/RIASEC, đặt shouldUseCareerContext=true và viết ragQuery bằng tiếng Việt/ngắn gọn.
+                Return JSON object exactly:
+                {
+                  "intent": "một trong allowedIntents",
+                  "answerMode": "SMALL_TALK | CAREER_ADVICE | SKILL_GAP | LEARNING_PATH | MARKET_QUESTION | CAREER_COMPARISON | PROFILE_DISCOVERY | GENERAL",
+                  "contextSummary": "tóm tắt context quan trọng cho LLM 2",
+                  "ragQuery": "truy vấn RAG phù hợp, hoặc chính tin nhắn người dùng nếu không cần tra sâu",
+                  "responseGuidance": "chiến lược trả lời cụ thể cho LLM 2",
+                  "shouldUseCareerContext": true,
+                  "confidence": 0-100,
+                  "nextSteps": ["2-4 gợi ý ngắn cho LLM 2 nếu cần"]
+                }
+                Payload:
+                %s
+                """.formatted(toJson(payload));
+    }
+
+    private String buildAnswerPrompt(
+            String message,
+            List<ConversationMessageResponse> recentMessages,
+            AiCareerAdviceService.CareerContext careerContext,
+            ContextAnalysis contextAnalysis,
+            List<RagDocumentResult> documents
+    ) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("latestUserMessage", message);
+        payload.put("recentConversation", recentMessages);
+        payload.put("contextAnalysisFromLlm1", contextAnalysisPayload(contextAnalysis));
+        payload.put("careerContext", careerContext);
+        payload.put("ragDocuments", documents.stream()
                 .map(doc -> doc.title() + ": " + doc.content())
-                .toList()
-                + "\nReturn JSON with content and confidence. Avoid absolute claims and provide multiple options.";
+                .toList());
+        return """
+                Bạn là LLM 2 trong pipeline Career Compass.
+                Nhiệm vụ: dựa trên định hướng của LLM 1 để trả lời trực tiếp cho người dùng bằng tiếng Việt.
+                Không bịa job, công ty, lương hoặc nguồn tuyển dụng ngoài payload.
+                Khi dùng dữ liệu job, nói rõ đó là mẫu crawl TopCV/context hiện có.
+                Khi tư vấn nghề, phải dựa trên RIASEC và dữ liệu careerContext/ragDocuments nếu có.
+                Giọng trả lời tự nhiên, hỗ trợ, tránh kết luận tuyệt đối.
+                Return JSON object exactly:
+                {
+                  "content": "câu trả lời cuối cùng gửi cho người dùng",
+                  "confidence": 0-100,
+                  "nextSteps": ["0-4 bước tiếp theo ngắn"]
+                }
+                Payload:
+                %s
+                """.formatted(toJson(payload));
     }
 
-    private String guardrail(String content) {
-        return content
-                .replace("Bạn chắc chắn chỉ phù hợp với nghề này.", "Đây là một trong các lựa chọn bạn có thể khám phá.")
-                .replace("Bạn không thể làm nghề", "Bạn có thể cần bổ sung kỹ năng trước khi theo nghề");
+    private Map<String, Object> contextAnalysisPayload(ContextAnalysis contextAnalysis) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("intent", contextAnalysis.intent().name());
+        payload.put("answerMode", contextAnalysis.answerMode());
+        payload.put("contextSummary", contextAnalysis.contextSummary());
+        payload.put("ragQuery", contextAnalysis.ragQuery());
+        payload.put("responseGuidance", contextAnalysis.responseGuidance());
+        payload.put("shouldUseCareerContext", contextAnalysis.shouldUseCareerContext());
+        payload.put("confidence", contextAnalysis.confidence());
+        payload.put("nextSteps", contextAnalysis.nextSteps());
+        return payload;
+    }
+
+    private ContextAnalysis parseContextAnalysis(String content) {
+        try {
+            JsonNode node = objectMapper.readTree(content);
+            return new ContextAnalysis(
+                    parseIntent(requiredText(node, "intent", "LLM đọc context")),
+                    requiredText(node, "answerMode", "LLM đọc context"),
+                    requiredText(node, "contextSummary", "LLM đọc context"),
+                    requiredText(node, "ragQuery", "LLM đọc context"),
+                    requiredText(node, "responseGuidance", "LLM đọc context"),
+                    requiredBoolean(node, "shouldUseCareerContext", "LLM đọc context"),
+                    requiredConfidence(node, "LLM đọc context"),
+                    requiredStringList(node, "nextSteps", "LLM đọc context")
+            );
+        } catch (IllegalArgumentException | JsonProcessingException exception) {
+            throw new ApiException(HttpStatus.BAD_GATEWAY, "LLM đọc context trả dữ liệu không hợp lệ");
+        }
     }
 
     private ParsedAssistantResponse parseAssistantResponse(String content) {
         try {
             JsonNode node = objectMapper.readTree(content);
             return new ParsedAssistantResponse(
-                    node.path("content").asText("Dựa trên dữ liệu hiện tại, bạn có thể khám phá thêm nhiều lựa chọn nghề nghiệp."),
-                    node.path("confidence").asInt(60)
+                    requiredText(node, "content", "LLM trả lời"),
+                    requiredConfidence(node, "LLM trả lời"),
+                    requiredStringList(node, "nextSteps", "LLM trả lời")
             );
-        } catch (JsonProcessingException exception) {
-            return new ParsedAssistantResponse("Dựa trên dữ liệu hiện tại, bạn có thể khám phá thêm nhiều lựa chọn nghề nghiệp.", 50);
+        } catch (IllegalArgumentException | JsonProcessingException exception) {
+            throw new ApiException(HttpStatus.BAD_GATEWAY, "LLM trả lời trả dữ liệu không hợp lệ");
         }
+    }
+
+    private ChatIntent parseIntent(String value) {
+        try {
+            return ChatIntent.valueOf(value.trim().toUpperCase(Locale.ROOT));
+        } catch (RuntimeException exception) {
+            throw new IllegalArgumentException("Invalid intent " + value, exception);
+        }
+    }
+
+    private String requireSuccessfulLlm(LlmResponse response, String stage) {
+        if (response == null || !response.success() || !StringUtils.hasText(response.content())) {
+            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, stage + " thất bại: " + llmErrorMessage(response));
+        }
+        return response.content();
+    }
+
+    private String llmErrorMessage(LlmResponse response) {
+        if (response == null || !StringUtils.hasText(response.errorMessage())) {
+            return "không nhận được phản hồi từ provider. Kiểm tra LLM_PROVIDER và GEMINI_API_KEY/LLM_API_KEY.";
+        }
+        String message = response.errorMessage();
+        if (message.length() > 500) {
+            return message.substring(0, 500) + "...";
+        }
+        return message;
+    }
+
+    private String requiredText(JsonNode root, String field, String stage) {
+        String value = root.path(field).asText();
+        if (!StringUtils.hasText(value)) {
+            throw new IllegalArgumentException(stage + " missing " + field);
+        }
+        return value;
+    }
+
+    private boolean requiredBoolean(JsonNode root, String field, String stage) {
+        JsonNode value = root.path(field);
+        if (!value.isBoolean()) {
+            throw new IllegalArgumentException(stage + " missing " + field);
+        }
+        return value.asBoolean();
+    }
+
+    private int requiredConfidence(JsonNode root, String stage) {
+        JsonNode value = root.path("confidence");
+        if (!value.canConvertToInt()) {
+            throw new IllegalArgumentException(stage + " missing confidence");
+        }
+        return Math.max(0, Math.min(100, value.asInt()));
+    }
+
+    private List<String> requiredStringList(JsonNode root, String field, String stage) {
+        JsonNode value = root.path(field);
+        if (!value.isArray()) {
+            throw new IllegalArgumentException(stage + " missing " + field);
+        }
+        return objectMapper.convertValue(value, objectMapper.getTypeFactory().constructCollectionType(List.class, String.class));
     }
 
     private ConversationSession getOwnedSession(UUID userId, UUID sessionId) {
@@ -191,6 +375,18 @@ public class ChatService {
         }
     }
 
-    private record ParsedAssistantResponse(String content, int confidence) {
+    private record ContextAnalysis(
+            ChatIntent intent,
+            String answerMode,
+            String contextSummary,
+            String ragQuery,
+            String responseGuidance,
+            boolean shouldUseCareerContext,
+            int confidence,
+            List<String> nextSteps
+    ) {
+    }
+
+    private record ParsedAssistantResponse(String content, int confidence, List<String> nextSteps) {
     }
 }

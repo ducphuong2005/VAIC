@@ -120,6 +120,6 @@ class InternalCrawlerMarketIntegrationTest {
         mockMvc.perform(post("/api/internal/v1/crawler/runs")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"sourceName\":\"TopCV\"}"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 }

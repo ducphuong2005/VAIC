@@ -10,6 +10,8 @@ public interface JobPostingSkillRepository extends JpaRepository<JobPostingSkill
 
     void deleteByJobPostingId(Long jobPostingId);
 
+    List<JobPostingSkill> findByJobPostingId(Long jobPostingId);
+
     @Query("select s.skillName, count(s) from JobPostingSkill s group by s.normalizedSkillName, s.skillName order by count(s) desc")
     List<Object[]> findSkillsInDemand(Pageable pageable);
 }

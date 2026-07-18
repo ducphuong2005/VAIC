@@ -51,6 +51,7 @@ public class AssessmentService {
     private final ProfileEvidenceRepository evidenceRepository;
     private final AssessmentScoringService scoringService;
     private final ProfileService profileService;
+    private final AiCareerAdviceService aiCareerAdviceService;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
@@ -140,7 +141,14 @@ public class AssessmentService {
                 .toList();
         evidenceRepository.saveAll(evidence);
         profileService.recalculate(userId);
-        return new AssessmentResultResponse(sessionId, session.getStatus().name(), rawScores, normalizedScores, evidence.size());
+        return new AssessmentResultResponse(
+                sessionId,
+                session.getStatus().name(),
+                rawScores,
+                normalizedScores,
+                evidence.size(),
+                aiCareerAdviceService.buildAdvice(userId, "ASSESSMENT_COMPLETED", session.getNormalizedScorePayload())
+        );
     }
 
     @Transactional(readOnly = true)
@@ -151,7 +159,10 @@ public class AssessmentService {
                 session.getStatus().name(),
                 fromJson(session.getRawScorePayload()),
                 fromJson(session.getNormalizedScorePayload()),
-                0
+                0,
+                session.getStatus() == SessionStatus.COMPLETED
+                        ? aiCareerAdviceService.buildAdvice(userId, "ASSESSMENT_RESULT_VIEWED", session.getNormalizedScorePayload())
+                        : null
         );
     }
 

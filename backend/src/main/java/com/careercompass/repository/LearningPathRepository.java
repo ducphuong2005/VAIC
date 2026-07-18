@@ -9,4 +9,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface LearningPathRepository extends JpaRepository<LearningPath, UUID> {
     List<LearningPath> findByUserIdOrderByUpdatedAtDesc(UUID userId);
     Optional<LearningPath> findByIdAndUserId(UUID id, UUID userId);
+    Optional<LearningPath> findTopByUserIdAndOnetCodeOrderByUpdatedAtDesc(UUID userId, String onetCode);
 }

@@ -8,6 +8,7 @@ public record AssessmentResultResponse(
         String status,
         Map<String, Double> rawScores,
         Map<String, Double> normalizedScores,
-        int evidenceCreated
+        int evidenceCreated,
+        AiCareerAdviceResponse advice
 ) {
 }
