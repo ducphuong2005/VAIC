@@ -85,6 +85,22 @@ public class MockLlmProvider implements LlmProvider {
                 "nextSteps", List.of(
                         "Hoàn thành thêm khảo sát hoặc mini-game để tăng độ tin cậy.",
                         "Hỏi tiếp về kỹ năng, lộ trình học hoặc job cụ thể bạn muốn so sánh."
+                ),
+                "learningResources", List.of(
+                        Map.of(
+                                "provider", "W3Schools",
+                                "title", "SQL Tutorial",
+                                "url", "https://www.w3schools.com/sql/",
+                                "targetSkill", "SQL",
+                                "reason", "Rèn nền tảng truy vấn dữ liệu qua ví dụ thực hành."
+                        ),
+                        Map.of(
+                                "provider", "Coursera",
+                                "title", "Tìm khóa học Data Analysis trên Coursera",
+                                "url", "https://www.coursera.org/courses?query=data%20analysis",
+                                "targetSkill", "Data Analysis",
+                                "reason", "Chọn khóa học/certificate phù hợp với hướng phân tích dữ liệu."
+                        )
                 )
         ));
     }

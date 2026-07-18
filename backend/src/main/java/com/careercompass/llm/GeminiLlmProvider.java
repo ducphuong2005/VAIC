@@ -247,9 +247,23 @@ public class GeminiLlmProvider implements LlmProvider {
                 Map.of(
                         "content", stringSchema(),
                         "confidence", integerSchema(0, 100),
-                        "nextSteps", arraySchema(stringSchema())
+                        "nextSteps", arraySchema(stringSchema()),
+                        "learningResources", arraySchema(learningResourceSchema())
                 ),
-                List.of("content", "confidence", "nextSteps")
+                List.of("content", "confidence", "nextSteps", "learningResources")
+        );
+    }
+
+    private Map<String, Object> learningResourceSchema() {
+        return objectSchema(
+                Map.of(
+                        "provider", stringSchema(),
+                        "title", stringSchema(),
+                        "url", stringSchema(),
+                        "targetSkill", stringSchema(),
+                        "reason", stringSchema()
+                ),
+                List.of("provider", "title", "url", "targetSkill", "reason")
         );
     }
 

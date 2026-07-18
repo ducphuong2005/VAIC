@@ -38,6 +38,8 @@ public class LearningPathStep {
     private String targetSkill;
     @Column(name = "course_id")
     private Long courseId;
+    @Column(name = "resource_links")
+    private String resourceLinks;
     @Column(name = "duration_hours")
     private Integer durationHours;
     @Column(name = "progress_percent", nullable = false)

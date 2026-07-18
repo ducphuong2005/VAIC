@@ -1,6 +1,7 @@
 package com.careercompass.service;
 
 import com.careercompass.dto.response.AiCareerOptionResponse;
+import com.careercompass.dto.response.SkillDemandResponse;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -12,6 +13,7 @@ import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -49,6 +51,23 @@ public class JobMarketCsvService {
 
     public int sampleCount() {
         return samples().size();
+    }
+
+    public List<SkillDemandResponse> skillsInDemand(int limit) {
+        Map<String, Long> counts = samples().stream()
+                .flatMap(sample -> marketSkillTerms(sample).stream())
+                .map(this::clean)
+                .filter(StringUtils::hasText)
+                .filter(value -> value.length() <= 70)
+                .collect(java.util.stream.Collectors.groupingBy(
+                        value -> normalize(value).replaceAll("\\s+", " "),
+                        java.util.stream.Collectors.counting()
+                ));
+        return counts.entrySet().stream()
+                .sorted(Map.Entry.<String, Long>comparingByValue().reversed().thenComparing(Map.Entry::getKey))
+                .limit(Math.max(0, limit))
+                .map(entry -> new SkillDemandResponse(displayTerm(entry.getKey()), entry.getValue(), "data/jobs.csv"))
+                .toList();
     }
 
     private List<JobMarketSample> samples() {
@@ -221,6 +240,24 @@ public class JobMarketCsvService {
                 .filter(StringUtils::hasText)
                 .limit(20)
                 .toList();
+    }
+
+    private List<String> marketSkillTerms(JobMarketSample sample) {
+        List<String> skills = sample.skills().stream()
+                .filter(value -> StringUtils.hasText(value) && value.length() <= 70)
+                .toList();
+        return skills.isEmpty() ? sample.fields() : skills;
+    }
+
+    private String displayTerm(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        String trimmed = value.trim().replaceAll("\\s+", " ");
+        if (trimmed.length() <= 3) {
+            return trimmed.toUpperCase(Locale.ROOT);
+        }
+        return trimmed.substring(0, 1).toUpperCase(Locale.ROOT) + trimmed.substring(1);
     }
 
     private String clean(String value) {

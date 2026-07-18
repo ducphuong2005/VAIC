@@ -1,8 +1,10 @@
 import { card } from '../components/layout.js';
 import { icon } from '../components/icons.js';
-import { getMiniGames, startMiniGame, recordMiniGameActions, completeMiniGame } from '../api/minigameApi.js';
+import { getMiniGames, getLatestMiniGameResult, startMiniGame, recordMiniGameActions, completeMiniGame } from '../api/minigameApi.js';
+import { saveFavoriteLink } from '../api/favoriteApi.js';
 import { isAuthenticated } from '../core/authStore.js';
 import { escapeHtml } from '../core/formatters.js';
+import { renderJobSearchLinks } from '../core/externalLinks.js';
 import { escapeRooms, riasecLabels } from '../data/escapeRoomData.js';
 
 const letters = ['A', 'B', 'C'];
@@ -24,11 +26,14 @@ function initialState(backendGameId = '') {
     wrongAttempts: 0,
     startedAt: Date.now(),
     actions: [],
+    history: [],
     completed: false,
     saving: false,
     saved: false,
     saveError: '',
-    advice: null
+    advice: null,
+    latestResult: null,
+    loadedSavedResult: false
   };
 }
 
@@ -43,6 +48,13 @@ async function loadBackendGameId() {
 
 export async function minigamePage() {
   state = initialState(await loadBackendGameId());
+  if (isAuthenticated()) {
+    try {
+      state.latestResult = await getLatestMiniGameResult();
+    } catch {
+      state.latestResult = null;
+    }
+  }
   return renderShell();
 }
 
@@ -60,7 +72,12 @@ function progressPercent() {
 }
 
 function renderShell() {
-  return `<section class="escape-game" data-escape-root>${renderGame()}</section>`;
+  return `<section class="escape-game" data-escape-root>${renderContent()}</section>`;
+}
+
+function renderContent(message = '') {
+  const saved = !state.completed && state.latestResult ? renderSavedResultCard(state.latestResult) : '';
+  return `${saved}${renderGame(message)}`;
 }
 
 function renderGame(message = '') {
@@ -92,7 +109,10 @@ function renderGame(message = '') {
             <h2>${escapeHtml(room.title)}</h2>
             <p>${escapeHtml(room.focus)}</p>
           </div>
-          <span class="escape-step">${state.stepIndex + 1}/5</span>
+          <div class="escape-stage-actions">
+            <button class="btn btn-outline btn-sm" type="button" data-escape-back ${state.history.length ? '' : 'disabled'}>${icon('arrow', 14)} Quay lại</button>
+            <span class="escape-step">${state.stepIndex + 1}/5</span>
+          </div>
         </div>
         ${renderScene(room, step)}
         <div class="escape-story">
@@ -106,8 +126,51 @@ function renderGame(message = '') {
     </div>`;
 }
 
+function renderSavedResultCard(result = {}) {
+  const summary = parseSummary(result.resultSummary);
+  const top = (summary.topTypes || []).slice(0, 3).join(' - ') || 'Đã hoàn thành';
+  return `<div class="saved-minigame card">
+    <div>
+      <span class="eyebrow">KẾT QUẢ ĐÃ LƯU</span>
+      <h2>${escapeHtml(top)}</h2>
+      <p>Kết quả mini-game gần nhất đã được lưu trong backend. Bạn có thể xem lại hoặc làm lại để cập nhật dữ liệu.</p>
+    </div>
+    <div class="saved-minigame-actions">
+      <button class="btn btn-outline" type="button" data-escape-view-saved>Xem kết quả đã lưu</button>
+      <button class="btn btn-primary" type="button" data-escape-restart>Chơi lại</button>
+    </div>
+  </div>`;
+}
+
 function renderMiniScores() {
   return Object.entries(state.scores).map(([key, value]) => `<label><span>${key} - ${riasecLabels[key]}</span><b>${value}</b><i style="width:${Math.min(100, value / 9 * 100)}%"></i></label>`).join('');
+}
+
+function snapshotState() {
+  return {
+    roomIndex: state.roomIndex,
+    stepIndex: state.stepIndex,
+    scores: { ...state.scores },
+    puzzleCorrect: state.puzzleCorrect,
+    wrongAttempts: state.wrongAttempts,
+    actions: state.actions.map(action => ({ ...action }))
+  };
+}
+
+function restoreSnapshot(snapshot) {
+  state.roomIndex = snapshot.roomIndex;
+  state.stepIndex = snapshot.stepIndex;
+  state.scores = { ...snapshot.scores };
+  state.puzzleCorrect = snapshot.puzzleCorrect;
+  state.wrongAttempts = snapshot.wrongAttempts;
+  state.actions = snapshot.actions.map(action => ({ ...action }));
+}
+
+function goBack() {
+  const snapshot = state.history.pop();
+  if (!snapshot || state.completed || state.saving) return;
+  restoreSnapshot(snapshot);
+  updateGame('Đã quay lại câu trước. Bạn có thể chọn lại đáp án.');
 }
 
 function renderScene(room, step) {
@@ -194,6 +257,7 @@ function handleAnswer(choiceIndex) {
   const room = currentRoom();
   const step = currentStep();
   const [label, score] = step.choices[choiceIndex];
+  state.history.push(snapshotState());
   const action = {
     roomId: room.id,
     roomCode: room.code,
@@ -247,7 +311,9 @@ function renderResult() {
   const bars = Object.entries(state.scores).map(([key, value]) => `<label><span><b>${key}</b>${riasecLabels[key]}</span><i><em style="width:${value / max * 100}%"></em></i><strong>${value}</strong></label>`).join('');
   const saveLine = !isAuthenticated()
     ? '<p class="muted">Bạn đang chơi ở chế độ khách. Đăng nhập để lưu kết quả vào backend.</p><a class="btn btn-primary" href="login.html">Đăng nhập để lưu</a>'
-    : state.saved
+    : state.loadedSavedResult
+      ? '<p class="escape-save ok">Đang hiển thị kết quả mini-game đã lưu trong backend.</p>'
+      : state.saved
       ? '<p class="escape-save ok">Đã lưu kết quả và tạo gợi ý AI từ dữ liệu việc làm.</p>'
       : state.saveError
         ? `<p class="escape-save error">${escapeHtml(state.saveError)}</p>`
@@ -284,6 +350,7 @@ function renderAiAdvice() {
     <li>
       <b>${escapeHtml(job.title || 'Job sample TopCV')}</b>
       <span>${escapeHtml(job.location || job.region || 'Không rõ khu vực')} · ${salaryText(job)}</span>
+      ${job.rawUrl ? `<div class="external-links"><div class="external-link"><a href="${escapeHtml(job.rawUrl)}" target="_blank" rel="noreferrer">${escapeHtml(job.sourceName || 'Job gốc')}</a><button class="save-link-btn" type="button" data-save-link data-link-type="JOB" data-provider="${escapeHtml(job.sourceName || 'Job board')}" data-title="${escapeHtml(job.title || 'Job link')}" data-url="${escapeHtml(job.rawUrl)}" data-description="${escapeHtml(job.companyName || job.location || '')}">Lưu</button></div></div>` : renderJobSearchLinks(job.title || 'việc làm', `Job sample từ ${job.sourceName || 'data/jobs.csv'}`)}
     </li>`).join('');
   const nextSteps = (advice.nextSteps || []).slice(0, 4).map(step => `<li>${icon('check', 15)} ${escapeHtml(step)}</li>`).join('');
   const content = `
@@ -295,7 +362,7 @@ function renderAiAdvice() {
         <div class="tags">${(advice.topRiasecTypes || []).slice(0, 3).map(type => `<span>${escapeHtml(type.split(':')[0])}</span>`).join('')}</div>
       </div>
       <div class="ai-result-actions">
-        <a class="btn btn-primary" href="recommendations.html">Xem gợi ý cá nhân hóa ${icon('arrow', 15)}</a>
+        <a class="btn btn-primary" href="index.html">Về trang chủ ${icon('arrow', 15)}</a>
         <a class="btn btn-outline" href="learning.html">Mở lộ trình học tập</a>
         <a class="btn btn-ghost" href="careers.html">Khám phá nghề phù hợp</a>
       </div>
@@ -315,6 +382,28 @@ function salaryText(job = {}) {
   if (min) return `từ ${min} triệu`;
   if (max) return `đến ${max} triệu`;
   return job.sourceName || 'TopCV CSV';
+}
+
+function parseSummary(value) {
+  try {
+    return value ? JSON.parse(value) : {};
+  } catch {
+    return {};
+  }
+}
+
+function viewSavedResult() {
+  if (!state.latestResult) return;
+  const summary = parseSummary(state.latestResult.resultSummary);
+  state.scores = summary.scores || state.scores;
+  state.puzzleCorrect = Number(summary.puzzleCorrect || state.puzzleCorrect || 0);
+  state.wrongAttempts = Number(summary.wrongAttempts || state.wrongAttempts || 0);
+  state.completed = true;
+  state.saved = true;
+  state.loadedSavedResult = true;
+  state.saveError = '';
+  state.advice = state.latestResult.advice || null;
+  updateGame();
 }
 
 async function saveResult() {
@@ -340,6 +429,7 @@ async function saveResult() {
       wrongAttempts: state.wrongAttempts
     }));
     state.advice = result.advice || null;
+    state.latestResult = result;
     state.saved = true;
   } catch (error) {
     state.saveError = error.message || 'Chưa lưu được kết quả vào backend.';
@@ -352,16 +442,35 @@ async function saveResult() {
 function updateGame(message = '') {
   const root = document.querySelector('[data-escape-root]');
   if (!root) return;
-  root.innerHTML = renderGame(message);
+  root.innerHTML = renderContent(message);
   bindEscapeEvents();
 }
 
 function bindEscapeEvents() {
   document.querySelectorAll('[data-escape-answer]').forEach(button => button.addEventListener('click', () => handleAnswer(Number(button.dataset.escapeAnswer))));
+  document.querySelector('[data-escape-back]')?.addEventListener('click', goBack);
+  document.querySelector('[data-escape-view-saved]')?.addEventListener('click', viewSavedResult);
   document.querySelector('[data-escape-restart]')?.addEventListener('click', () => {
-    state = initialState(state.backendGameId);
+    state = { ...initialState(state.backendGameId), latestResult: null };
     updateGame();
   });
+  document.querySelectorAll('[data-save-link]').forEach(button => button.addEventListener('click', async () => {
+    button.disabled = true;
+    try {
+      await saveFavoriteLink({
+        linkType: button.dataset.linkType || 'JOB',
+        provider: button.dataset.provider || 'Job board',
+        title: button.dataset.title || 'Job link',
+        url: button.dataset.url,
+        description: button.dataset.description || ''
+      });
+      button.textContent = 'Đã lưu';
+      button.classList.add('saved');
+    } catch (error) {
+      button.title = error.message || 'Không thể lưu link.';
+      button.disabled = false;
+    }
+  }));
 }
 
 export function bindMinigameEvents() {

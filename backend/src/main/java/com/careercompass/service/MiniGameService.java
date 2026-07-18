@@ -159,6 +159,13 @@ public class MiniGameService {
         return result(userId, sessionId, 0);
     }
 
+    @Transactional(readOnly = true)
+    public MiniGameResultResponse latestCompletedResult(UUID userId) {
+        MiniGameSession session = sessionRepository.findFirstByUserIdAndStatusOrderByCompletedAtDesc(userId, SessionStatus.COMPLETED)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "No completed mini-game result"));
+        return result(userId, session.getId(), 0);
+    }
+
     private MiniGameResultResponse result(UUID userId, UUID sessionId, int evidenceCreated) {
         return result(userId, sessionId, evidenceCreated, null);
     }

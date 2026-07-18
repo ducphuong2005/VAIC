@@ -40,6 +40,7 @@ public class MarketSignalService {
     private final JobPostingSkillRepository skillRepository;
     private final MarketSignalRepository marketSignalRepository;
     private final OccupationRepository occupationRepository;
+    private final JobMarketCsvService jobMarketCsvService;
 
     @Transactional
     public int recalculate() {
@@ -98,9 +99,13 @@ public class MarketSignalService {
 
     @Transactional(readOnly = true)
     public List<SkillDemandResponse> skillsInDemand(int limit) {
-        return skillRepository.findSkillsInDemand(PageRequest.of(0, limit)).stream()
+        List<SkillDemandResponse> databaseSkills = skillRepository.findSkillsInDemand(PageRequest.of(0, limit)).stream()
                 .map(row -> new SkillDemandResponse((String) row[0], (Long) row[1], TOPCV_SOURCE))
                 .toList();
+        if (!databaseSkills.isEmpty()) {
+            return databaseSkills;
+        }
+        return jobMarketCsvService.skillsInDemand(limit);
     }
 
     @Transactional(readOnly = true)

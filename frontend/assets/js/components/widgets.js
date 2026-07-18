@@ -1,5 +1,6 @@
 import { icon } from './icons.js';
 import { escapeHtml } from '../core/formatters.js';
+import { renderJobSearchLinks } from '../core/externalLinks.js';
 
 const colors = ['#4f68ed', '#7551ee', '#21a985', '#f09a48', '#38a9b4', '#8b5cf6'];
 const symbols = ['⌁', '◫', '✦', '◎'];
@@ -58,18 +59,18 @@ export function skillStrip(skills = []) {
 }
 
 export function recommendationCard(recommendation, compact = false) {
-  if (!recommendation) return '<div class="empty-state"><h3>Chưa có gợi ý</h3><p>Backend chưa tạo gợi ý nghề nghiệp cho tài khoản này.</p><a class="btn btn-primary" href="recommendations.html">Tạo gợi ý</a></div>';
+  if (!recommendation) return '<div class="empty-state"><h3>Chưa có dữ liệu</h3><p>Hoàn thành mini-game để backend phân tích hướng nghề phù hợp.</p><a class="btn btn-primary" href="index.html">Về trang chủ</a></div>';
   const title = recommendation.careerName || recommendation.titleVi || 'Nghề nghiệp';
   const match = Math.round(Number(recommendation.scores?.finalScore ?? recommendation.confidence ?? 0) <= 1 ? Number(recommendation.scores?.finalScore ?? recommendation.confidence ?? 0) * 100 : Number(recommendation.scores?.finalScore ?? recommendation.confidence ?? 0));
   const tags = [recommendation.group, recommendation.onetCode, ...(recommendation.marketEvidence || []).slice(0, 1)].filter(Boolean);
   const reasons = (recommendation.reasons || recommendation.considerations || []).slice(0, 3);
-  return `<div class="recommend-card ${compact ? 'compact' : ''}"><div class="recommend-top"><span class="best-label">Phù hợp nhất với bạn</span><span class="match">${match || 0}% phù hợp</span></div><h3>${escapeHtml(title)}</h3><div class="tags">${tags.map(x => `<span>${escapeHtml(x)}</span>`).join('')}</div><h4>Vì sao phù hợp?</h4><ul class="check-list">${reasons.length ? reasons.map(x => `<li>${icon('check', 16)} ${escapeHtml(x)}</li>`).join('') : `<li>${icon('check', 16)} Backend chưa trả về giải thích chi tiết.</li>`}</ul><a href="recommendations.html" class="text-link">Xem giải thích chi tiết ${icon('arrow', 15)}</a></div>`;
+  return `<div class="recommend-card ${compact ? 'compact' : ''}"><div class="recommend-top"><span class="best-label">Phù hợp nhất với bạn</span><span class="match">${match || 0}% phù hợp</span></div><h3>${escapeHtml(title)}</h3><div class="tags">${tags.map(x => `<span>${escapeHtml(x)}</span>`).join('')}</div><h4>Vì sao phù hợp?</h4><ul class="check-list">${reasons.length ? reasons.map(x => `<li>${icon('check', 16)} ${escapeHtml(x)}</li>`).join('') : `<li>${icon('check', 16)} Backend chưa trả về giải thích chi tiết.</li>`}</ul><a href="index.html" class="text-link">Về trang chủ ${icon('arrow', 15)}</a></div>`;
 }
 
 export function careerGrid(items = []) {
   if (!items.length) return '<div class="empty-state"><h3>Chưa có nghề nghiệp</h3><p>Backend chưa trả về dữ liệu nghề nghiệp.</p></div>';
   return `<div class="career-grid">${items.map((raw, i) => {
     const c = raw.title ? raw : toCareerCard(raw, i);
-    return `<article class="career-card" data-career="${escapeHtml(c.title.toLowerCase())}" data-onet-code="${escapeHtml(c.onetCode || '')}"><div class="career-cover cover-${i % 4}"><span>${symbols[i % symbols.length]}</span><button class="save-btn" aria-label="Lưu nghề" data-save="${escapeHtml(c.onetCode || '')}">${icon('bookmark', 18)}</button></div><div class="career-body"><div class="match-line"><span>${escapeHtml(c.tags[0] || 'Nghề nghiệp')}</span><strong>${c.match == null ? 'Từ backend' : `${c.match}% phù hợp`}</strong></div><h3>${escapeHtml(c.title)}</h3><p>${escapeHtml(c.subtitle)}</p><div class="career-stats"><span>${escapeHtml(c.salary)}</span><span class="up">${Number(c.growth) ? `▲ ${escapeHtml(c.growth)}` : 'Backend'}</span></div><a class="btn btn-soft btn-block" href="recommendations.html">Xem chi tiết ${icon('arrow', 15)}</a></div></article>`;
+    return `<article class="career-card" data-career="${escapeHtml(c.title.toLowerCase())}" data-onet-code="${escapeHtml(c.onetCode || '')}"><div class="career-cover cover-${i % 4}"><span>${symbols[i % symbols.length]}</span><button class="save-btn" aria-label="Lưu nghề" data-save="${escapeHtml(c.onetCode || '')}">${icon('bookmark', 18)}</button></div><div class="career-body"><div class="match-line"><span>${escapeHtml(c.tags[0] || 'Nghề nghiệp')}</span><strong>${c.match == null ? 'Từ backend' : `${c.match}% phù hợp`}</strong></div><h3>${escapeHtml(c.title)}</h3><p>${escapeHtml(c.subtitle)}</p><div class="career-stats"><span>${escapeHtml(c.salary)}</span><span class="up">${Number(c.growth) ? `▲ ${escapeHtml(c.growth)}` : 'Backend'}</span></div>${renderJobSearchLinks(c.title, c.subtitle)}<a class="btn btn-soft btn-block" href="index.html">Về trang chủ ${icon('arrow', 15)}</a></div></article>`;
   }).join('')}</div>`;
 }

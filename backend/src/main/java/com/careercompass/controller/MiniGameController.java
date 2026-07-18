@@ -32,6 +32,11 @@ public class MiniGameController {
         return ApiResponse.success(miniGameService.list());
     }
 
+    @GetMapping("/api/v1/minigames/latest-result")
+    public ApiResponse<MiniGameResultResponse> latestResult(@AuthenticationPrincipal UserPrincipal principal) {
+        return ApiResponse.success(miniGameService.latestCompletedResult(principal.getId()));
+    }
+
     @GetMapping("/api/v1/minigames/{id}")
     public ApiResponse<MiniGameDetailResponse> detail(@PathVariable UUID id) {
         return ApiResponse.success(miniGameService.detail(id));

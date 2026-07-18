@@ -6,6 +6,7 @@ import com.careercompass.dto.response.ChatMessageResponse;
 import com.careercompass.dto.response.ChatSessionDetailResponse;
 import com.careercompass.dto.response.ChatSessionResponse;
 import com.careercompass.dto.response.ConversationMessageResponse;
+import com.careercompass.dto.response.LearningResourceResponse;
 import com.careercompass.entity.ChatIntent;
 import com.careercompass.entity.ConversationMessage;
 import com.careercompass.entity.ConversationSession;
@@ -47,6 +48,7 @@ public class ChatService {
     private final RagRetriever ragRetriever;
     private final LlmService llmService;
     private final AiCareerAdviceService aiCareerAdviceService;
+    private final LearningResourceService learningResourceService;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -131,7 +133,8 @@ public class ChatService {
                     "AI guidance generated from chatbot and data/jobs.csv",
                     parsed.content(),
                     parsed.confidence(),
-                    parsed.nextSteps()
+                    parsed.nextSteps(),
+                    parsed.learningResources()
             );
         }
         return new ChatMessageResponse(
@@ -142,7 +145,8 @@ public class ChatService {
                 List.<Object>of(Map.of(
                         "contextAnalysis", contextAnalysisPayload(contextAnalysis),
                         "careerContext", careerContext,
-                        "nextSteps", parsed.nextSteps()
+                        "nextSteps", parsed.nextSteps(),
+                        "learningResources", parsed.learningResources()
                 )),
                 sources,
                 parsed.confidence()
@@ -221,12 +225,23 @@ public class ChatService {
                 Khi dùng dữ liệu job, nói rõ đó là mẫu crawl TopCV/context hiện có.
                 Khi tư vấn nghề, phải dựa trên RIASEC và dữ liệu careerContext/ragDocuments nếu có.
                 Giọng trả lời tự nhiên, hỗ trợ, tránh kết luận tuyệt đối.
+                Trả lời ngắn gọn trong 2-4 câu. Không dùng Markdown, bullet, bảng, tiêu đề, **bold**, `code` hoặc link dạng Markdown.
                 Return JSON object exactly:
                 {
-                  "content": "câu trả lời cuối cùng gửi cho người dùng",
+                  "content": "câu trả lời cuối cùng gửi cho người dùng, plain text ngắn gọn",
                   "confidence": 0-100,
-                  "nextSteps": ["0-4 bước tiếp theo ngắn"]
+                  "nextSteps": ["0-4 bước tiếp theo ngắn"],
+                  "learningResources": [
+                    {
+                      "provider": "Coursera | W3Schools | freeCodeCamp | Google",
+                      "title": "tên bài học/khóa học nên học",
+                      "url": "link khóa học hoặc trang tìm kiếm chính thức",
+                      "targetSkill": "kỹ năng cần bổ sung",
+                      "reason": "vì sao phù hợp với người dùng"
+                    }
+                  ]
                 }
+                Nếu người dùng hỏi về nghề/kỹ năng/lộ trình, hãy gợi ý bài học thị trường phù hợp. Ưu tiên link chính thức Coursera hoặc W3Schools; không bịa link cụ thể nếu không chắc.
                 Payload:
                 %s
                 """.formatted(toJson(payload));
@@ -267,9 +282,10 @@ public class ChatService {
         try {
             JsonNode node = objectMapper.readTree(content);
             return new ParsedAssistantResponse(
-                    requiredText(node, "content", "LLM trả lời"),
+                    plainChatContent(requiredText(node, "content", "LLM trả lời")),
                     requiredConfidence(node, "LLM trả lời"),
-                    requiredStringList(node, "nextSteps", "LLM trả lời")
+                    requiredStringList(node, "nextSteps", "LLM trả lời"),
+                    learningResourceService.parseFromLlm(objectMapper.convertValue(node.path("learningResources"), Object.class))
             );
         } catch (IllegalArgumentException | JsonProcessingException exception) {
             throw new ApiException(HttpStatus.BAD_GATEWAY, "LLM trả lời trả dữ liệu không hợp lệ");
@@ -375,6 +391,28 @@ public class ChatService {
         }
     }
 
+    private String plainChatContent(String value) {
+        String plain = value
+                .replace("```", "")
+                .replaceAll("(?m)^\\s{0,3}#{1,6}\\s*", "")
+                .replaceAll("\\*\\*(.*?)\\*\\*", "$1")
+                .replaceAll("__(.*?)__", "$1")
+                .replaceAll("\\*(.*?)\\*", "$1")
+                .replaceAll("_(.*?)_", "$1")
+                .replaceAll("`([^`]*)`", "$1")
+                .replaceAll("\\[([^\\]]+)]\\(([^)]+)\\)", "$1")
+                .replaceAll("(?m)^\\s*[-*+]\\s+", "")
+                .replaceAll("(?m)^\\s*\\d+[.)]\\s+", "")
+                .replaceAll("[\\r\\n]+", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+        if (plain.length() <= 700) {
+            return plain;
+        }
+        int cut = Math.max(420, plain.lastIndexOf('.', 700));
+        return plain.substring(0, Math.min(cut + 1, plain.length())).trim();
+    }
+
     private record ContextAnalysis(
             ChatIntent intent,
             String answerMode,
@@ -387,6 +425,11 @@ public class ChatService {
     ) {
     }
 
-    private record ParsedAssistantResponse(String content, int confidence, List<String> nextSteps) {
+    private record ParsedAssistantResponse(
+            String content,
+            int confidence,
+            List<String> nextSteps,
+            List<LearningResourceResponse> learningResources
+    ) {
     }
 }

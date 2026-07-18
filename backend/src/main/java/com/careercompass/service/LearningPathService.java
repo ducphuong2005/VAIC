@@ -26,6 +26,7 @@ public class LearningPathService {
     private final OccupationRepository occupationRepository;
     private final CourseRepository courseRepository;
     private final ActivityLogService activityLogService;
+    private final LearningResourceService learningResourceService;
 
     @Transactional
     public LearningPathResponse generate(UUID userId, GenerateLearningPathRequest request) {
@@ -39,9 +40,9 @@ public class LearningPathService {
                 .status("ACTIVE")
                 .build());
         List<LearningPathStep> steps = List.of(
-                step(path.getId(), 1, "Củng cố nền tảng", "Ôn lại kỹ năng nền tảng và thuật ngữ nghề.", "Foundations", 1L, 24),
-                step(path.getId(), 2, "Thực hành kỹ năng chính", "Làm project nhỏ liên quan nghề mục tiêu.", "Practice", 2L, 36),
-                step(path.getId(), 3, "Xây portfolio", "Tổng hợp sản phẩm và chuẩn bị phỏng vấn.", "Portfolio", 3L, 30)
+                step(path.getId(), 1, "Củng cố nền tảng", "Ôn lại kỹ năng nền tảng và thuật ngữ nghề.", "Foundations", occupation.getTitleVi(), 1L, 24),
+                step(path.getId(), 2, "Thực hành kỹ năng chính", "Làm project nhỏ liên quan nghề mục tiêu.", "Practice", occupation.getTitleVi(), 2L, 36),
+                step(path.getId(), 3, "Xây portfolio", "Tổng hợp sản phẩm và chuẩn bị phỏng vấn.", "Portfolio", occupation.getTitleVi(), 3L, 30)
         );
         stepRepository.saveAll(steps);
         activityLogService.log(userId, "LEARNING_PATH_GENERATED", "Learning path generated", path.getId().toString());
@@ -73,9 +74,20 @@ public class LearningPathService {
         return pathRepository.findByIdAndUserId(id, userId).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Learning path not found"));
     }
 
-    private LearningPathStep step(UUID pathId, int order, String title, String desc, String skill, Long courseId, int hours) {
+    private LearningPathStep step(UUID pathId, int order, String title, String desc, String skill, String careerTitle, Long courseId, int hours) {
         if (!courseRepository.existsById(courseId)) courseId = null;
-        return LearningPathStep.builder().learningPathId(pathId).stepOrder(order).title(title).description(desc).targetSkill(skill).courseId(courseId).durationHours(hours).progressPercent(0).completed(false).build();
+        return LearningPathStep.builder()
+                .learningPathId(pathId)
+                .stepOrder(order)
+                .title(title)
+                .description(desc)
+                .targetSkill(skill)
+                .courseId(courseId)
+                .resourceLinks(learningResourceService.resourceLinksPayload(skill, careerTitle, desc, List.of()))
+                .durationHours(hours)
+                .progressPercent(0)
+                .completed(false)
+                .build();
     }
 
     private LearningPathResponse toResponse(LearningPath path) {
@@ -84,6 +96,17 @@ public class LearningPathService {
     }
 
     private LearningPathStepResponse toStep(LearningPathStep step) {
-        return new LearningPathStepResponse(step.getId(), step.getStepOrder(), step.getTitle(), step.getDescription(), step.getTargetSkill(), step.getCourseId(), step.getDurationHours(), step.getProgressPercent(), step.isCompleted());
+        return new LearningPathStepResponse(
+                step.getId(),
+                step.getStepOrder(),
+                step.getTitle(),
+                step.getDescription(),
+                step.getTargetSkill(),
+                step.getCourseId(),
+                learningResourceService.parse(step.getResourceLinks()),
+                step.getDurationHours(),
+                step.getProgressPercent(),
+                step.isCompleted()
+        );
     }
 }

@@ -1,4 +1,17 @@
 package com.careercompass.dto.response;
 
-public record LearningPathStepResponse(Long id, int stepOrder, String title, String description, String targetSkill, Long courseId, Integer durationHours, int progressPercent, boolean completed) {
+import java.util.List;
+
+public record LearningPathStepResponse(
+        Long id,
+        int stepOrder,
+        String title,
+        String description,
+        String targetSkill,
+        Long courseId,
+        List<LearningResourceResponse> resources,
+        Integer durationHours,
+        int progressPercent,
+        boolean completed
+) {
 }

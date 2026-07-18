@@ -15,6 +15,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -30,6 +31,16 @@ class InternalCrawlerMarketIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Test
+    @Sql(statements = {"DELETE FROM job_posting_skills", "DELETE FROM job_postings"})
+    void returnsSkillDemandFallbackFromJobsCsv() throws Exception {
+        mockMvc.perform(get("/api/v1/market/skills-in-demand"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.data[0].skillName").exists())
+                .andExpect(jsonPath("$.data[0].source").value("data/jobs.csv"));
+    }
 
     @Test
     void importsJobsDeduplicatesAndRecalculatesMarketSignals() throws Exception {

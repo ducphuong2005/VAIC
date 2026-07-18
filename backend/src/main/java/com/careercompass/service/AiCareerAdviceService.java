@@ -3,6 +3,7 @@ package com.careercompass.service;
 import com.careercompass.dto.response.AiCareerAdviceResponse;
 import com.careercompass.dto.response.AiCareerOptionResponse;
 import com.careercompass.dto.response.JobPostingResponse;
+import com.careercompass.dto.response.LearningResourceResponse;
 import com.careercompass.entity.CareerRecommendation;
 import com.careercompass.entity.JobPosting;
 import com.careercompass.entity.JobPostingSkill;
@@ -93,6 +94,7 @@ public class AiCareerAdviceService {
     private final SkillGapCalculator skillGapCalculator;
     private final RagRetriever ragRetriever;
     private final JobMarketCsvService jobMarketCsvService;
+    private final LearningResourceService learningResourceService;
     private final ActivityLogService activityLogService;
     private final LlmService llmService;
     private final ObjectMapper objectMapper;
@@ -142,12 +144,18 @@ public class AiCareerAdviceService {
             String activityMessage,
             String adviceContent,
             int confidence,
-            List<String> nextSteps
+            List<String> nextSteps,
+            List<LearningResourceResponse> learningResources
     ) {
         publishPersonalizedOutputs(
                 userId,
                 context,
-                new ParsedAdvice(adviceContent, Math.max(0, Math.min(100, confidence)), nextSteps == null ? List.of() : nextSteps),
+                new ParsedAdvice(
+                        adviceContent,
+                        Math.max(0, Math.min(100, confidence)),
+                        nextSteps == null ? List.of() : nextSteps,
+                        learningResources == null ? List.of() : learningResources
+                ),
                 activityType,
                 activityMessage
         );
@@ -255,8 +263,18 @@ public class AiCareerAdviceService {
                 {
                   "content": "3-5 câu tư vấn tổng hợp",
                   "confidence": 0-100,
-                  "nextSteps": ["3-5 bước hành động ngắn"]
+                  "nextSteps": ["3-5 bước hành động ngắn"],
+                  "learningResources": [
+                    {
+                      "provider": "Coursera | W3Schools | freeCodeCamp | Google",
+                      "title": "tên bài học/khóa học nên học",
+                      "url": "link khóa học hoặc trang tìm kiếm chính thức",
+                      "targetSkill": "kỹ năng cần bổ sung",
+                      "reason": "vì sao phù hợp với người dùng"
+                    }
+                  ]
                 }
+                Ưu tiên link chính thức từ Coursera hoặc W3Schools. Không bịa link khóa học cụ thể nếu không chắc; dùng link search Coursera theo kỹ năng/nghề hoặc tutorial W3Schools phù hợp.
                 Payload:
                 %s
                 """.formatted(toJson(payload));
@@ -268,7 +286,10 @@ public class AiCareerAdviceService {
             String advice = requiredText(root, "content", "LLM tư vấn");
             int confidence = requiredConfidence(root, "LLM tư vấn");
             List<String> nextSteps = requiredStringList(root, "nextSteps", "LLM tư vấn");
-            return new ParsedAdvice(advice, confidence, nextSteps);
+            List<LearningResourceResponse> learningResources = learningResourceService.parseFromLlm(
+                    objectMapper.convertValue(root.path("learningResources"), Object.class)
+            );
+            return new ParsedAdvice(advice, confidence, nextSteps, learningResources);
         } catch (IllegalArgumentException | JsonProcessingException exception) {
             throw new ApiException(HttpStatus.BAD_GATEWAY, "LLM tư vấn trả dữ liệu không hợp lệ");
         }
@@ -353,10 +374,11 @@ public class AiCareerAdviceService {
                 .profileSnapshot(toJson(Map.of(
                         "trigger", context.trigger(),
                         "eventSummary", context.eventSummary() == null ? "" : context.eventSummary(),
-                        "llmAdvice", parsed.content(),
-                        "riasec", context.topRiasecTypes(),
-                        "jobMarketSampleSource", "data/jobs.csv",
-                        "jobMarketSampleCount", jobMarketCsvService.sampleCount()
+                    "llmAdvice", parsed.content(),
+                    "riasec", context.topRiasecTypes(),
+                    "learningResources", parsed.learningResources(),
+                    "jobMarketSampleSource", "data/jobs.csv",
+                    "jobMarketSampleCount", jobMarketCsvService.sampleCount()
                 )))
                 .profileConfidence(BigDecimal.valueOf(parsed.confidence()).setScale(2, RoundingMode.HALF_UP))
                 .status(RecommendationRunStatus.COMPLETED)
@@ -509,6 +531,12 @@ public class AiCareerAdviceService {
                     .description(stepText)
                     .targetSkill(limit(targetSkill(stepText, jobs), 190))
                     .courseId(null)
+                    .resourceLinks(learningResourceService.resourceLinksPayload(
+                            targetSkill(stepText, jobs),
+                            option.titleVi(),
+                            stepText,
+                            parsed.learningResources()
+                    ))
                     .durationHours(estimatedHours(order))
                     .progressPercent(0)
                     .completed(false)
@@ -669,7 +697,12 @@ public class AiCareerAdviceService {
         }
     }
 
-    private record ParsedAdvice(String content, int confidence, List<String> nextSteps) {
+    private record ParsedAdvice(
+            String content,
+            int confidence,
+            List<String> nextSteps,
+            List<LearningResourceResponse> learningResources
+    ) {
     }
 
     public record CareerContext(

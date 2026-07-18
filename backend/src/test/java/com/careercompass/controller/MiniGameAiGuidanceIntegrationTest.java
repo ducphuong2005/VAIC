@@ -70,11 +70,20 @@ class MiniGameAiGuidanceIntegrationTest {
                 .andExpect(jsonPath("$.data.recommendations[0].reasons.length()", greaterThanOrEqualTo(2)))
                 .andExpect(jsonPath("$.data.recommendations[0].sources", hasItem("data/jobs.csv")));
 
+        mockMvc.perform(get("/api/v1/minigames/latest-result")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.data.resultSummary").exists())
+                .andExpect(jsonPath("$.data.advice.sources", hasItem("data/jobs.csv")));
+
         mockMvc.perform(get("/api/v1/learning-paths")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(1)))
-                .andExpect(jsonPath("$.data[0].steps.length()", greaterThanOrEqualTo(3)));
+                .andExpect(jsonPath("$.data[0].steps.length()", greaterThanOrEqualTo(3)))
+                .andExpect(jsonPath("$.data[0].steps[0].resources.length()", greaterThanOrEqualTo(2)))
+                .andExpect(jsonPath("$.data[0].steps[0].resources[*].provider", hasItem("Coursera")));
     }
 
     private String registerAndGetAccessToken(String email) throws Exception {

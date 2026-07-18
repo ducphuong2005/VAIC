@@ -3,13 +3,9 @@ import { navItems, pageMeta } from '../data.js';
 import { clearTokens, getCurrentUser, getDisplayName, getUserInitials, isAuthenticated } from '../core/authStore.js';
 
 export function sidebar(page) {
-  const profileBox = isAuthenticated()
-    ? `<div class="profile-progress sidebar-status"><span class="status-icon">${icon('user', 22)}</span><small>Hồ sơ backend</small><p>Cập nhật hồ sơ để backend tính gợi ý chính xác hơn.</p><a class="btn btn-glass btn-sm" href="profile.html">Mở hồ sơ</a></div>`
-    : `<div class="profile-progress sidebar-status"><span class="status-icon">${icon('lock', 22)}</span><small>Chưa đăng nhập</small><p>Đăng nhập để xem hồ sơ và dữ liệu cá nhân từ backend.</p><a class="btn btn-glass btn-sm" href="login.html">Đăng nhập</a></div>`;
   return `<aside class="sidebar" id="sidebar">
     <div class="brand"><span class="brand-mark">${icon('discover', 27)}</span><span>CAREER<br>COMPASS</span></div>
-    <nav class="nav-list">${navItems.map(([id, label, url, ico], i) => `${i === 7 ? '<span class="nav-divider"></span>' : ''}<a class="nav-item ${page === id ? 'active' : ''}" href="${url}">${icon(ico, 19)}<span>${label}</span></a>`).join('')}</nav>
-    ${profileBox}
+    <nav class="nav-list">${navItems.map(([id, label, url, ico], i) => `${i === navItems.length - 1 ? '<span class="nav-divider"></span>' : ''}<a class="nav-item ${page === id ? 'active' : ''}" href="${url}">${icon(ico, 19)}<span>${label}</span></a>`).join('')}</nav>
   </aside><div class="sidebar-overlay" data-sidebar-close></div>`;
 }
 

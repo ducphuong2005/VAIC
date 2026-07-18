@@ -221,9 +221,24 @@ public class OpenAiLlmProvider implements LlmProvider {
                                         "nextSteps", Map.of(
                                                 "type", "array",
                                                 "items", Map.of("type", "string")
+                                        ),
+                                        "learningResources", Map.of(
+                                                "type", "array",
+                                                "items", Map.of(
+                                                        "type", "object",
+                                                        "additionalProperties", false,
+                                                        "properties", Map.of(
+                                                                "provider", Map.of("type", "string"),
+                                                                "title", Map.of("type", "string"),
+                                                                "url", Map.of("type", "string"),
+                                                                "targetSkill", Map.of("type", "string"),
+                                                                "reason", Map.of("type", "string")
+                                                        ),
+                                                        "required", List.of("provider", "title", "url", "targetSkill", "reason")
+                                                )
                                         )
                                 ),
-                                "required", List.of("content", "confidence", "nextSteps")
+                                "required", List.of("content", "confidence", "nextSteps", "learningResources")
                         )
                 )
         );

@@ -75,7 +75,9 @@ class ChatFlowIntegrationTest {
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()", greaterThanOrEqualTo(1)))
-                .andExpect(jsonPath("$.data[0].steps.length()", greaterThanOrEqualTo(3)));
+                .andExpect(jsonPath("$.data[0].steps.length()", greaterThanOrEqualTo(3)))
+                .andExpect(jsonPath("$.data[0].steps[0].resources.length()", greaterThanOrEqualTo(2)))
+                .andExpect(jsonPath("$.data[0].steps[0].resources[*].provider", hasItem("Coursera")));
     }
 
     @Test

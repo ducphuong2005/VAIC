@@ -1,10 +1,13 @@
 package com.careercompass.controller;
 
+import com.careercompass.dto.request.FavoriteLinkRequest;
 import com.careercompass.dto.response.ApiResponse;
 import com.careercompass.dto.response.CareerSummaryResponse;
 import com.careercompass.dto.response.CourseResponse;
+import com.careercompass.dto.response.FavoriteLinkResponse;
 import com.careercompass.security.UserPrincipal;
 import com.careercompass.service.FavoriteService;
+import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -12,6 +15,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -53,5 +57,24 @@ public class FavoriteController {
     @GetMapping("/courses")
     public ApiResponse<List<CourseResponse>> courses(@AuthenticationPrincipal UserPrincipal principal) {
         return ApiResponse.success(service.courses(principal.getId()));
+    }
+
+    @PostMapping("/links")
+    public ApiResponse<FavoriteLinkResponse> saveLink(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @Valid @RequestBody FavoriteLinkRequest request
+    ) {
+        return ApiResponse.success(service.saveLink(principal.getId(), request));
+    }
+
+    @DeleteMapping("/links/{id}")
+    public ApiResponse<Void> deleteLink(@AuthenticationPrincipal UserPrincipal principal, @PathVariable Long id) {
+        service.deleteLink(principal.getId(), id);
+        return ApiResponse.success(null);
+    }
+
+    @GetMapping("/links")
+    public ApiResponse<List<FavoriteLinkResponse>> links(@AuthenticationPrincipal UserPrincipal principal) {
+        return ApiResponse.success(service.links(principal.getId()));
     }
 }
