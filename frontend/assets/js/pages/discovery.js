@@ -1,11 +1,27 @@
 import { card } from '../components/layout.js';
 import { icon } from '../components/icons.js';
+import { getAssessments, startAssessment } from '../api/assessmentApi.js';
+import { escapeHtml } from '../core/formatters.js';
 
-const tests=[['Khám phá tính cách','Hiểu phong cách làm việc và cách bạn tương tác với mọi người.','12 câu · 8 phút','discover',65],['Sở thích nghề nghiệp','Xác định nhóm hoạt động và môi trường khiến bạn hứng thú.','18 câu · 10 phút','heart',30],['Đánh giá năng lực','Tìm ra những kỹ năng tự nhiên và điểm mạnh nổi bật của bạn.','15 câu · 12 phút','spark',0],['Giá trị nghề nghiệp','Điều gì thực sự quan trọng với bạn trong một công việc?','12 câu · 7 phút','star',0]];
+export async function discoveryPage() {
+  const tests = await getAssessments();
+  const intro = `<div class="discovery-hero"><div><span class="eyebrow">ASSESSMENT TỪ BACKEND</span><h2>Khám phá bản thân<br><em>bằng dữ liệu từ API</em></h2><p>Danh sách bài đánh giá bên dưới được lấy trực tiếp từ backend.</p></div><div class="hero-orbit"><span>${icon('discover', 44)}</span><i>✦</i><b>✧</b></div></div>`;
+  const cards = `<div class="test-grid">${(tests || []).map((test, i) => `<article class="test-card"><div class="test-icon color-${i}">${icon(['discover', 'heart', 'spark', 'star'][i % 4], 25)}</div><div class="test-status">${escapeHtml(test.assessmentType || 'Assessment')}</div><h3>${escapeHtml(test.title)}</h3><p>${escapeHtml(test.description || 'Backend chưa có mô tả.')}</p><small>${test.estimatedMinutes || 0} phút</small><button class="btn ${i === 0 ? 'btn-primary' : 'btn-soft'} btn-block" data-test-start="${escapeHtml(test.id)}">Bắt đầu ${icon('arrow', 15)}</button></article>`).join('') || '<div class="empty-state"><h3>Chưa có bài đánh giá</h3><p>Backend chưa trả về assessment nào.</p></div>'}</div>`;
+  const result = '<div class="result-preview"><div><span>Kết quả đánh giá</span><h3>Được backend tính sau khi hoàn thành</h3><p>Trang này không dùng chân dung mẫu. Kết quả thật sẽ đến từ API assessment session/result.</p></div></div>';
+  return `${intro}${cards}${card('Kết quả từ backend', result, { icon: 'spark' })}`;
+}
 
-export function discoveryPage(){
- const intro=`<div class="discovery-hero"><div><span class="eyebrow">HÀNH TRÌNH HIỂU CHÍNH MÌNH</span><h2>Bạn độc đáo theo cách riêng.<br><em>Hãy cùng khám phá!</em></h2><p>Hoàn thành 4 bài đánh giá ngắn để xây dựng chân dung nghề nghiệp toàn diện nhất.</p><div class="hero-progress"><span>Tiến độ tổng thể <b>42%</b></span><div class="progress"><i style="width:42%"></i></div></div></div><div class="hero-orbit"><span>🧠</span><i>✦</i><b>✧</b></div></div>`;
- const cards=`<div class="test-grid">${tests.map(([title,desc,time,ico,progress],i)=>`<article class="test-card"><div class="test-icon color-${i}">${icon(ico,25)}</div><div class="test-status">${progress===0?'Chưa bắt đầu':progress===100?'Hoàn thành':progress+'% hoàn thành'}</div><h3>${title}</h3><p>${desc}</p><small>⏱ ${time}</small>${progress?`<div class="progress slim"><i style="width:${progress}%"></i></div>`:''}<button class="btn ${i===0?'btn-primary':'btn-soft'} btn-block" data-test-start>${progress?'Tiếp tục':'Bắt đầu'} ${icon('arrow',15)}</button></article>`).join('')}</div>`;
- const result=`<div class="result-preview"><div><span>Chân dung sơ bộ của bạn</span><h3>Nhà phân tích sáng tạo</h3><p>Bạn kết hợp tốt giữa tư duy logic, khả năng quan sát và óc sáng tạo. Những môi trường linh hoạt, có dữ liệu và thử thách mới sẽ giúp bạn tỏa sáng.</p></div><div class="trait-bars">${[['Tư duy phân tích',88],['Tò mò học hỏi',82],['Sáng tạo',74]].map(([x,n])=>`<label>${x}<div class="progress slim"><i style="width:${n}%"></i></div><b>${n}%</b></label>`).join('')}</div></div>`;
- return `${intro}${cards}${card('Kết quả đang dần hiện rõ',result,{icon:'spark'})}`;
+export function bindDiscoveryEvents() {
+  document.querySelectorAll('[data-test-start]').forEach(button => button.addEventListener('click', async () => {
+    button.disabled = true;
+    button.textContent = 'Đang tạo phiên...';
+    try {
+      const session = await startAssessment(button.dataset.testStart);
+      sessionStorage.setItem('careerCompass.assessmentSession', JSON.stringify(session));
+      button.textContent = 'Đã tạo phiên';
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = error.message || 'Thử lại';
+    }
+  }));
 }

@@ -44,6 +44,7 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/actuator/health").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/careers/**", "/api/v1/career-clusters").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/minigames", "/api/v1/minigames/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/market/**").permitAll()
                         .requestMatchers("/api/internal/**").hasAnyRole("CRAWLER", "ADMIN")
                         .anyRequest().authenticated()

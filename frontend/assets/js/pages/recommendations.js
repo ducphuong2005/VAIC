@@ -1,10 +1,41 @@
 import { card } from '../components/layout.js';
 import { icon } from '../components/icons.js';
 import { recommendationCard } from '../components/widgets.js';
+import { getDisplayName, isAuthenticated } from '../core/authStore.js';
+import { generateRecommendations, getLatestRecommendations } from '../api/recommendationApi.js';
+import { escapeHtml } from '../core/formatters.js';
 
-export function recommendationsPage(){
- const aiHero=`<div class="ai-hero"><span class="ai-orb">${icon('spark',32)}</span><div><span class="eyebrow">PHÂN TÍCH BỞI CAREER COMPASS AI</span><h2>Minh Anh, chúng mình đã tìm thấy<br><em>3 hướng đi rất hợp với bạn</em></h2><p>Kết quả dựa trên 5 điểm mạnh, 4 sở thích và dữ liệu từ 8 mini-game bạn đã hoàn thành.</p></div><button class="btn btn-white">${icon('download',16)} Tải báo cáo PDF</button></div>`;
- const main=`<div class="recommend-layout"><div>${card('Lựa chọn phù hợp nhất',recommendationCard(),{icon:'star',className:'primary-recommend'})}${card('AI giải thích như thế nào?','<div class="explain-grid"><div><b>01</b><h3>Hiểu bạn</h3><p>Phân tích sở thích, giá trị nghề nghiệp và cách bạn giải quyết vấn đề.</p></div><div><b>02</b><h3>So khớp dữ liệu</h3><p>Đối chiếu hồ sơ với hơn 200 nghề và dữ liệu tuyển dụng thực tế.</p></div><div><b>03</b><h3>Giải thích rõ ràng</h3><p>Chỉ ra điểm phù hợp, khoảng trống kỹ năng và bước đi tiếp theo.</p></div></div>',{icon:'bot'})}</div><div>${card('Điểm tương thích','<div class="match-radar"><div class="radar-shape"></div><span class="r1">Phân tích <b>94</b></span><span class="r2">Sáng tạo <b>76</b></span><span class="r3">Công nghệ <b>89</b></span><span class="r4">Giao tiếp <b>68</b></span><span class="r5">Kinh doanh <b>72</b></span></div>',{icon:'chart'})}${card('Hỏi Career Compass AI','<div class="quick-prompts"><button>Vì sao Data Science hợp với mình?</button><button>Mình còn thiếu kỹ năng gì?</button><button>So sánh Data Science và BA</button></div><a href="#ai-chat" class="btn btn-primary btn-block">Bắt đầu trò chuyện '+icon('arrow',15)+'</a>',{icon:'bot'})}</div></div>`;
- const alternatives=`<div class="alternative-grid"><article><span class="alt-icon">💻</span><div><small>LỰA CHỌN #2</small><h3>Kỹ sư phần mềm</h3><p>Xây dựng sản phẩm số và giải quyết bài toán bằng công nghệ.</p></div><strong>87%</strong></article><article><span class="alt-icon">📈</span><div><small>LỰA CHỌN #3</small><h3>Phân tích kinh doanh</h3><p>Kết nối dữ liệu, công nghệ với các quyết định kinh doanh.</p></div><strong>83%</strong></article></div>`;
- return `${aiHero}${main}<h2 class="section-title">Các lựa chọn phù hợp khác</h2>${alternatives}`;
+let run = null;
+
+export async function recommendationsPage() {
+  if (!isAuthenticated()) throw new Error('Bạn cần đăng nhập để tải gợi ý từ backend.');
+  try {
+    run = await getLatestRecommendations();
+  } catch {
+    run = null;
+  }
+  const displayName = getDisplayName();
+  const recommendations = run?.recommendations || [];
+  const best = recommendations[0];
+  const aiHero = `<div class="ai-hero"><span class="ai-orb">${icon('spark', 32)}</span><div><span class="eyebrow">PHÂN TÍCH TỪ BACKEND</span><h2>${displayName}, dữ liệu gợi ý nghề nghiệp<br><em>được lấy trực tiếp từ API</em></h2><p>${run ? `Run ${run.runId} · Độ tin cậy hồ sơ ${Math.round((run.profileConfidence || 0) * 100)}%` : 'Chưa có lần tạo gợi ý nào cho tài khoản này.'}</p></div><button class="btn btn-white" data-generate-recommendations>${icon('spark', 16)} Tạo gợi ý mới</button></div>`;
+  const explanation = best ? `<div class="explain-grid">${(best.reasons || []).slice(0, 3).map((reason, index) => `<div><b>${String(index + 1).padStart(2, '0')}</b><h3>Lý do từ backend</h3><p>${escapeHtml(reason)}</p></div>`).join('') || '<div><b>API</b><h3>Chưa có lý do</h3><p>Backend chưa trả về giải thích cho gợi ý này.</p></div>'}</div>` : '<div class="empty-state"><h3>Chưa có gợi ý</h3><p>Bấm tạo gợi ý mới để backend phân tích hồ sơ.</p></div>';
+  const score = best?.scores || {};
+  const radar = `<div class="match-radar"><div class="radar-shape"></div><span class="r1">Sở thích <b>${Math.round(score.interest || 0)}</b></span><span class="r2">Năng lực <b>${Math.round(score.ability || 0)}</b></span><span class="r3">Kỹ năng <b>${Math.round(score.skill || 0)}</b></span><span class="r4">Thị trường <b>${Math.round(score.market || 0)}</b></span><span class="r5">Khả thi <b>${Math.round(score.feasibility || 0)}</b></span></div>`;
+  const main = `<div class="recommend-layout"><div>${card('Lựa chọn phù hợp nhất', recommendationCard(best), { icon: 'star', className: 'primary-recommend' })}${card('Backend giải thích như thế nào?', explanation, { icon: 'bot' })}</div><div>${card('Điểm tương thích', radar, { icon: 'chart' })}${card('Thao tác', '<button class="btn btn-primary btn-block" data-generate-recommendations>Tạo lại từ backend ' + icon('arrow', 15) + '</button>', { icon: 'bot' })}</div></div>`;
+  const alternatives = `<div class="alternative-grid">${recommendations.slice(1).map(item => `<article><span class="alt-icon">${icon('briefcase', 20)}</span><div><small>LỰA CHỌN #${item.rank}</small><h3>${escapeHtml(item.careerName)}</h3><p>${escapeHtml((item.reasons || [])[0] || item.group || 'Gợi ý từ backend')}</p></div><strong>${Math.round(item.scores?.finalScore || item.confidence || 0)}%</strong></article>`).join('') || '<div class="empty-state"><h3>Chưa có lựa chọn khác</h3><p>Backend chưa trả về thêm gợi ý.</p></div>'}</div>`;
+  return `${aiHero}${main}<h2 class="section-title">Các lựa chọn phù hợp khác</h2>${alternatives}`;
+}
+
+export function bindRecommendationsEvents() {
+  document.querySelectorAll('[data-generate-recommendations]').forEach(button => button.addEventListener('click', async () => {
+    button.disabled = true;
+    button.textContent = 'Đang tạo...';
+    try {
+      await generateRecommendations({});
+      location.reload();
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = error.message || 'Thử lại';
+    }
+  }));
 }
