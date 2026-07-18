@@ -7,6 +7,11 @@ import { escapeRooms, riasecLabels } from '../data/escapeRoomData.js';
 
 const letters = ['A', 'B', 'C'];
 const totalPuzzles = escapeRooms.reduce((sum, room) => sum + room.steps.filter(step => step.kind === 'puzzle').length, 0);
+const roomImageFolders = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6'];
+const roomImageFileOverrides = {
+  'R2-4': 'R3M4.png',
+  'R2-5': 'R3M5.png'
+};
 let state;
 
 function initialState(backendGameId = '') {
@@ -106,6 +111,18 @@ function renderMiniScores() {
 
 function renderScene(room, step) {
   const sceneNote = step.kind === 'puzzle' ? step.title : room.subtitle;
+  const folder = roomImageFolders[state.roomIndex] || `R${state.roomIndex + 1}`;
+  const stepNumber = state.stepIndex + 1;
+  const fileName = roomImageFileOverrides[`${folder}-${stepNumber}`] || `${folder}M${stepNumber}.png`;
+  const imageSrc = `../images/${folder}/${fileName}`;
+
+  return `
+    <div class="escape-scene scene-${room.scene}">
+      <img class="escape-scene-image" src="${imageSrc}" alt="${escapeHtml(room.title)} - ${escapeHtml(step.title)}">
+      <div class="scene-image-shade"></div>
+      <div class="scene-label">${escapeHtml(sceneNote)}</div>
+    </div>`;
+
   const layers = {
     R: `
       <div class="scene-grid"></div>
