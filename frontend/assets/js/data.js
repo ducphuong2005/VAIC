@@ -1,7 +1,6 @@
 export const navItems = [
   ['home', 'Trang chủ', 'index.html', 'home'],
   ['profile', 'Hồ sơ của bạn', 'profile.html', 'user'],
-  ['discovery', 'Khám phá bản thân', 'discovery.html', 'discover'],
   ['minigame', 'Mini-game', 'minigame.html', 'game'],
   ['careers', 'Khám phá nghề', 'careers.html', 'briefcase'],
   ['recommendations', 'Gợi ý cá nhân hóa', 'recommendations.html', 'spark'],
@@ -14,7 +13,6 @@ export const navItems = [
 export const pageMeta = {
   home: user => [`Xin chào, ${(user?.fullName || user?.name || 'bạn').trim()}!`, 'Khám phá điểm mạnh và nghề nghiệp phù hợp với bạn.'],
   profile: ['Hồ sơ của bạn', 'Quản lý thông tin và theo dõi mức độ hoàn thiện hồ sơ.'],
-  discovery: ['Khám phá bản thân', 'Hiểu rõ tính cách, sở thích và năng lực nổi trội của bạn.'],
   minigame: ['Mini-game nghề nghiệp', 'Vừa chơi vừa khám phá những kỹ năng tiềm ẩn của bạn.'],
   careers: ['Khám phá nghề nghiệp', 'Tìm hiểu cơ hội, mức lương và xu hướng tuyển dụng mới nhất.'],
   recommendations: ['Gợi ý dành riêng cho bạn', 'Đề xuất được phân tích từ hồ sơ, kỹ năng và dữ liệu thị trường.'],
